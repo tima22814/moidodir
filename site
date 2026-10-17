@@ -1,0 +1,462 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Расчёт уборки — Мойдодыр</title>
+<script>
+/* =====================================================================
+   НАСТРОЙКИ КОМПАНИИ — единственное место, которое меняется под клиента.
+   Чтобы собрать версию под другую клининговую компанию, замените этот блок.
+   ===================================================================== */
+const CONFIG = {
+  demo: true, // true — показывать плашку «демо-версия»; в рабочей версии поставить false
+  company: {
+    name: "Мойдодыр",
+    title: "Клининговая компания «Мойдодыр»",
+    city: "Самара",
+    tagline: "Делаем чисто у вас дома и в офисе с 2010 года",
+    logo: "https://moidodir63.ru/netcat_files/c/logo.png",
+    phones: ["+7 (846) 990-64-79", "+7 (927) 260-64-79"],
+    hours: "Ежедневно с 9:00 до 21:00",
+    site: "https://moidodir63.ru",
+    guarantees: [
+      "Оплата только после приёмки работы",
+      "Возмещаем ущерб, если что-то повредим",
+      "Сотрудники подписали договор о неразглашении"
+    ]
+  },
+  telegram: "ggstartt",            // ник, в чей Telegram уходит заявка (без @)
+  colors: { primary: "#1976D2", accent: "#E0312A" },
+  minOrder: 5000,                  // минимальный заказ, ₽
+  area: { min: 15, max: 300, default: 54 },
+  cleaningTypes: [
+    { id: "daily",   name: "Поддерживающая",        price: 40, desc: "Пыль, полы, сантехника, кухня снаружи" },
+    { id: "general", name: "Генеральная",           price: 80, desc: "Всё жильё целиком, включая труднодоступные места и кафель" },
+    { id: "repair",  name: "После ремонта",         price: 90, desc: "Строительная пыль, следы краски, затирки и клея" },
+    { id: "baby",    name: "Перед выпиской из роддома", price: 80, desc: "Генеральная уборка с дезинфекцией поверхностей" }
+  ],
+  extras: [
+    { group: "Окна", items: [
+      { id: "win1", name: "Окно, 1 створка",     price: 250, repairExtra: 100 },
+      { id: "win2", name: "Окно, 2 створки",     price: 450, repairExtra: 100 },
+      { id: "win3", name: "Окно, 3 створки",     price: 600, repairExtra: 100 },
+      { id: "door", name: "Балконная дверь",     price: 400, repairExtra: 100 }
+    ]},
+    { group: "Кухня", items: [
+      { id: "fridge", name: "Холодильник внутри", price: 500 },
+      { id: "oven",   name: "Духовой шкаф",       price: 500 },
+      { id: "micro",  name: "Микроволновка",      price: 300 },
+      { id: "hood",   name: "Вытяжка",            price: 300 },
+      { id: "cabinet",name: "Кухонный шкаф внутри", price: 100 }
+    ]},
+    { group: "Балкон и лоджия", items: [
+      { id: "balcony", name: "Балкон, до 4 створок", price: 1000 },
+      { id: "loggia",  name: "Лоджия, до 6 створок", price: 1200 }
+    ]},
+    { group: "Химчистка мебели", items: [
+      { id: "sofa",   name: "Диван до 3 мест",     price: 2000 },
+      { id: "corner", name: "Угловой диван",       price: 2200 },
+      { id: "chair",  name: "Кресло",              price: 500 },
+      { id: "mat1",   name: "Матрас односпальный", price: 2000 },
+      { id: "mat2",   name: "Матрас двуспальный",  price: 2200 }
+    ]}
+  ],
+  // Акция компании: окна от 5 000 ₽ — микроволновка в подарок
+  promo: { windowsFrom: 5000, freeItem: "micro", text: "Мытьё окон от 5 000 ₽ — микроволновка в подарок" },
+  timeSlots: ["9:00–12:00", "12:00–15:00", "15:00–18:00", "18:00–21:00"],
+  note: "Цена предварительная. Точную стоимость менеджер подтвердит после уточнения деталей."
+};
+</script>
+<style>
+:root{
+  --primary:#1976D2; --accent:#E0312A;
+  --bg:#ffffff; --bg-soft:#f4f7fb; --text:#1b2430; --muted:#5f6b7a; --line:#e2e8f0; --card:#ffffff;
+  --radius:14px;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){ --bg:#0f141b; --bg-soft:#161d27; --text:#e8edf3; --muted:#9aa7b6; --line:#273241; --card:#141b24; }
+}
+:root[data-theme="dark"]{ --bg:#0f141b; --bg-soft:#161d27; --text:#e8edf3; --muted:#9aa7b6; --line:#273241; --card:#141b24; }
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--text);font:16px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;-webkit-font-smoothing:antialiased}
+.wrap{max-width:1080px;margin:0 auto;padding:0 16px}
+.demo-bar{background:#fff4d6;color:#6b4e00;font-size:13px;text-align:center;padding:6px 16px}
+header{border-bottom:1px solid var(--line);background:var(--bg)}
+.head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding-top:12px;padding-bottom:12px}
+.logo{text-decoration:none}
+.logo img{height:44px;display:block;max-width:180px;object-fit:contain}
+.logo .txt{font-weight:800;font-size:20px;color:var(--primary);display:none}
+.contacts{text-align:right;font-size:14px}
+.contacts a{color:var(--text);text-decoration:none;font-weight:600;display:block}
+.contacts small{color:var(--muted)}
+.hero{background:linear-gradient(135deg,var(--bg-soft),var(--bg));padding:28px 0 8px}
+h1{font-size:28px;line-height:1.2;margin:0 0 6px}
+.hero p{margin:0;color:var(--muted)}
+.guar{display:flex;flex-wrap:wrap;gap:8px 18px;margin:14px 0 0;padding:0;list-style:none;font-size:14px;color:var(--muted)}
+.guar li::before{content:"✓ ";color:var(--primary);font-weight:700}
+.grid{display:grid;grid-template-columns:1fr 340px;gap:24px;padding:20px 0 40px;align-items:start}
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:18px;margin-bottom:16px}
+.card h2{font-size:18px;margin:0 0 12px}
+.step{display:inline-flex;width:24px;height:24px;border-radius:50%;background:var(--primary);color:#fff;font-size:13px;align-items:center;justify-content:center;margin-right:8px;vertical-align:2px}
+.types{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.type{border:2px solid var(--line);border-radius:12px;padding:12px;cursor:pointer;background:var(--bg);text-align:left;color:var(--text);font:inherit}
+.type b{display:block}
+.type span{font-size:13px;color:var(--muted);display:block;margin-top:2px}
+.type em{font-style:normal;color:var(--primary);font-weight:700;font-size:14px;display:block;margin-top:6px}
+.type[aria-pressed="true"]{border-color:var(--primary);background:color-mix(in srgb,var(--primary) 8%,var(--bg))}
+.area{display:flex;align-items:center;gap:14px}
+.area input[type=range]{flex:1;accent-color:var(--primary)}
+.area .num{display:flex;align-items:center;border:1px solid var(--line);border-radius:10px;padding:4px 10px;background:var(--bg)}
+.area .num input{width:56px;border:0;font:inherit;font-weight:700;font-size:18px;background:transparent;color:var(--text);text-align:right}
+.group{margin-top:14px}
+.group h3{font-size:14px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);margin:0 0 6px}
+.extra{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 0;border-top:1px solid var(--line)}
+.extra .nm{flex:1}
+.extra .pr{color:var(--muted);font-size:14px;white-space:nowrap}
+.qty{display:flex;align-items:center;gap:6px}
+.qty button{width:32px;height:32px;border-radius:50%;border:1px solid var(--line);background:var(--bg);color:var(--text);font-size:18px;cursor:pointer;line-height:1}
+.qty output{min-width:18px;text-align:center;font-weight:700}
+.qty.on output{color:var(--primary)}
+label.f{display:block;font-size:14px;color:var(--muted);margin:10px 0 4px}
+.in{width:100%;padding:11px 12px;border:1px solid var(--line);border-radius:10px;font:inherit;background:var(--bg);color:var(--text)}
+.in:focus,.type:focus-visible{outline:2px solid var(--primary);outline-offset:1px}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.summary{position:sticky;top:16px}
+.total{font-size:32px;font-weight:800;margin:4px 0}
+.total small{font-size:16px;font-weight:600;color:var(--muted)}
+.lines{font-size:14px;color:var(--muted);margin:10px 0;padding:0;list-style:none}
+.lines li{display:flex;justify-content:space-between;gap:8px;padding:3px 0}
+.lines li span:last-child{white-space:nowrap;color:var(--text)}
+.hint{font-size:13px;padding:8px 10px;border-radius:8px;background:var(--bg-soft);color:var(--muted);margin:8px 0}
+.hint.promo{background:color-mix(in srgb,var(--accent) 10%,var(--bg));color:var(--text)}
+.btn{display:block;width:100%;border:0;border-radius:12px;padding:15px;font:inherit;font-weight:700;font-size:17px;cursor:pointer;background:var(--accent);color:#fff;text-align:center;text-decoration:none}
+.btn:hover{filter:brightness(.95)}
+.btn.sec{background:transparent;color:var(--primary);border:1px solid var(--line);font-size:15px;padding:11px;margin-top:8px}
+.err{color:var(--accent);font-size:13px;min-height:18px;margin-top:6px}
+.mobile-bar{display:none}
+footer{border-top:1px solid var(--line);padding:18px 0 90px;font-size:13px;color:var(--muted)}
+footer a{color:var(--muted)}
+/* превью заявки */
+.preview{white-space:pre-wrap;font:13px/1.45 ui-monospace,Menlo,Consolas,monospace;background:var(--bg-soft);border-radius:10px;padding:12px;border:1px dashed var(--line)}
+dialog{border:0;border-radius:16px;padding:0;max-width:520px;width:calc(100% - 32px);background:var(--card);color:var(--text)}
+dialog::backdrop{background:rgba(0,0,0,.45)}
+.dlg{padding:20px}
+.dlg h2{margin:0 0 6px;font-size:20px}
+/* панель владельца */
+#admin{display:none}
+#admin.open{display:block}
+#admin table{width:100%;border-collapse:collapse;font-size:14px}
+#admin td{padding:6px 4px;border-top:1px solid var(--line)}
+#admin td:last-child{width:110px}
+#admin input{width:100%;padding:6px 8px;border:1px solid var(--line);border-radius:8px;font:inherit;background:var(--bg);color:var(--text);text-align:right}
+@media (max-width:860px){
+  .grid{grid-template-columns:1fr}
+  .summary{position:static}
+  .mobile-bar{display:flex;position:fixed;left:0;right:0;bottom:0;z-index:5;background:var(--card);border-top:1px solid var(--line);padding:10px 16px;gap:12px;align-items:center}
+  .mobile-bar .t{flex:1;font-weight:800;font-size:20px}
+  .mobile-bar .t small{display:block;font-size:12px;font-weight:500;color:var(--muted)}
+  .mobile-bar .btn{width:auto;padding:12px 18px;font-size:15px}
+}
+@media (max-width:520px){
+  h1{font-size:23px}
+  .types{grid-template-columns:1fr}
+  .contacts a:nth-child(2),.contacts small{display:none}
+  .logo img{height:36px}
+}
+</style>
+</head>
+<body>
+<div class="demo-bar" id="demoBar" hidden></div>
+<header>
+  <div class="wrap head">
+    <a class="logo" id="logoLink"><img id="logoImg" alt=""><span class="txt" id="logoTxt"></span></a>
+    <div class="contacts" id="contacts"></div>
+  </div>
+</header>
+
+<section class="hero">
+  <div class="wrap">
+    <h1 id="h1">Рассчитайте стоимость уборки за минуту</h1>
+    <p id="sub"></p>
+    <ul class="guar" id="guar"></ul>
+  </div>
+</section>
+
+<main class="wrap grid">
+  <div>
+    <div class="card">
+      <h2><span class="step">1</span>Какая уборка нужна</h2>
+      <div class="types" id="types"></div>
+    </div>
+
+    <div class="card">
+      <h2><span class="step">2</span>Площадь квартиры</h2>
+      <div class="area">
+        <input type="range" id="areaRange" aria-label="Площадь">
+        <div class="num"><input type="number" id="areaNum" inputmode="numeric" aria-label="Площадь, м²"> м²</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2><span class="step">3</span>Дополнительно</h2>
+      <div id="extras"></div>
+    </div>
+
+    <div class="card" id="formCard">
+      <h2><span class="step">4</span>Куда и когда приехать</h2>
+      <label class="f" for="addr">Адрес *</label>
+      <input class="in" id="addr" placeholder="Улица, дом, квартира" autocomplete="street-address">
+      <div class="row2">
+        <div><label class="f" for="date">Дата</label><input class="in" type="date" id="date"></div>
+        <div><label class="f" for="slot">Время</label><select class="in" id="slot"></select></div>
+      </div>
+      <div class="row2">
+        <div><label class="f" for="name">Имя</label><input class="in" id="name" autocomplete="given-name"></div>
+        <div><label class="f" for="phone">Телефон *</label><input class="in" id="phone" type="tel" placeholder="+7" autocomplete="tel"></div>
+      </div>
+      <label class="f" for="comment">Комментарий</label>
+      <textarea class="in" id="comment" rows="2" placeholder="Например: есть кошка, нужен пылесос, домофон не работает"></textarea>
+    </div>
+  </div>
+
+  <aside class="summary">
+    <div class="card">
+      <h2>Предварительная стоимость</h2>
+      <div class="total" id="total">—</div>
+      <ul class="lines" id="lines"></ul>
+      <div id="hints"></div>
+      <button class="btn" id="sendBtn">Отправить заявку в Telegram</button>
+      <button class="btn sec" id="copyBtn">Скопировать текст заявки</button>
+      <div class="err" id="err" role="alert"></div>
+      <div class="hint" id="note"></div>
+    </div>
+
+    <div class="card" id="admin">
+      <h2>Панель владельца</h2>
+      <p class="hint" style="margin-top:0">Меняйте цены — расчёт на странице обновится сразу.</p>
+      <table id="adminTable"></table>
+      <button class="btn sec" id="resetBtn">Вернуть цены из прайса</button>
+    </div>
+  </aside>
+</main>
+
+<div class="mobile-bar">
+  <div class="t"><small>Предварительно</small><span id="mTotal">—</span></div>
+  <a class="btn" href="#formCard" id="mBtn">Оформить</a>
+</div>
+
+<footer>
+  <div class="wrap" id="foot"></div>
+</footer>
+
+<dialog id="dlg">
+  <div class="dlg">
+    <h2>Заявка готова</h2>
+    <p style="margin:0 0 10px;color:var(--muted);font-size:14px">Нажмите «Открыть Telegram»: текст заявки подставится сам, останется нажать «Отправить». Если Telegram не открылся, скопируйте текст и отправьте вручную.</p>
+    <div class="preview" id="preview"></div>
+    <a class="btn" id="tgLink" target="_blank" rel="noopener" style="margin-top:12px">Открыть Telegram</a>
+    <button class="btn sec" id="dlgCopy">Скопировать</button>
+    <button class="btn sec" id="dlgClose">Закрыть</button>
+  </div>
+</dialog>
+
+<script>
+(function(){
+  const C = CONFIG;
+  const $ = id => document.getElementById(id);
+  const fmt = n => n.toLocaleString("ru-RU") + " ₽";
+  const store = {
+    get(k){ try { return JSON.parse(localStorage.getItem(k)); } catch(e){ return null; } },
+    set(k,v){ try { localStorage.setItem(k, JSON.stringify(v)); } catch(e){} },
+    del(k){ try { localStorage.removeItem(k); } catch(e){} }
+  };
+  const PKEY = "prices_" + C.company.name;
+
+  // ---------- цены (базовые из CONFIG + правки владельца) ----------
+  const base = {};
+  C.cleaningTypes.forEach(t => base["t_"+t.id] = t.price);
+  C.extras.forEach(g => g.items.forEach(i => base["e_"+i.id] = i.price));
+  base.minOrder = C.minOrder;
+  let prices = Object.assign({}, base, store.get(PKEY) || {});
+
+  // ---------- оформление ----------
+  document.documentElement.style.setProperty("--primary", C.colors.primary);
+  document.documentElement.style.setProperty("--accent", C.colors.accent);
+  if (C.demo){
+    const bar = $("demoBar"); bar.hidden = false;
+    bar.textContent = "Демо-версия калькулятора для «" + C.company.name + "». Заявки с этой страницы уходят разработчику, а не в компанию.";
+  }
+  $("logoLink").href = C.company.site;
+  const img = $("logoImg");
+  img.src = C.company.logo; img.alt = C.company.title;
+  img.onerror = () => { img.style.display="none"; $("logoTxt").style.display="block"; };
+  $("logoTxt").textContent = C.company.name;
+  $("contacts").innerHTML = C.company.phones.map(p => `<a href="tel:${p.replace(/[^+\d]/g,"")}">${p}</a>`).join("") + `<small>${C.company.hours}</small>`;
+  $("sub").textContent = C.company.title + ", " + C.company.city + ". " + C.company.tagline + ".";
+  $("guar").innerHTML = C.company.guarantees.map(g => `<li>${g}</li>`).join("");
+  $("note").textContent = C.note;
+  $("foot").innerHTML = `${C.company.title} · ${C.company.city} · ${C.company.phones[0]} · <a href="#admin" id="adminLink">Панель владельца</a>`;
+
+  // ---------- состояние ----------
+  const state = { type: C.cleaningTypes[1].id, area: C.area.default, qty: {} };
+
+  // типы уборки
+  function renderTypes(){
+    $("types").innerHTML = C.cleaningTypes.map(t =>
+      `<button type="button" class="type" data-id="${t.id}" aria-pressed="${t.id===state.type}">
+        <b>${t.name}</b><span>${t.desc}</span><em>от ${prices["t_"+t.id]} ₽/м²</em></button>`).join("");
+  }
+  $("types").addEventListener("click", e => {
+    const b = e.target.closest(".type"); if(!b) return;
+    state.type = b.dataset.id; renderTypes(); renderExtras(); calc();
+  });
+
+  // площадь
+  const ar = $("areaRange"), an = $("areaNum");
+  ar.min = C.area.min; ar.max = C.area.max; ar.value = state.area; an.value = state.area;
+  ar.addEventListener("input", () => { state.area = +ar.value; an.value = ar.value; calc(); });
+  an.addEventListener("input", () => {
+    const v = Math.max(0, Math.min(1000, Math.round(+an.value || 0)));
+    state.area = v; ar.value = Math.min(Math.max(v, C.area.min), C.area.max); calc();
+  });
+
+  // доп. услуги
+  function itemPrice(i){
+    let p = prices["e_"+i.id];
+    if (state.type === "repair" && i.repairExtra) p += i.repairExtra;
+    return p;
+  }
+  function renderExtras(){
+    $("extras").innerHTML = C.extras.map(g => `<div class="group"><h3>${g.group}</h3>` +
+      g.items.map(i => { const q = state.qty[i.id] || 0; return `<div class="extra">
+        <span class="nm">${i.name}</span><span class="pr">${fmt(itemPrice(i))}</span>
+        <span class="qty ${q?"on":""}"><button type="button" data-id="${i.id}" data-d="-1" aria-label="Меньше">−</button>
+        <output>${q}</output><button type="button" data-id="${i.id}" data-d="1" aria-label="Больше">+</button></span></div>`; }).join("") + `</div>`).join("");
+  }
+  $("extras").addEventListener("click", e => {
+    const b = e.target.closest("button[data-id]"); if(!b) return;
+    const id = b.dataset.id; state.qty[id] = Math.max(0, Math.min(30, (state.qty[id]||0) + (+b.dataset.d)));
+    renderExtras(); calc();
+  });
+
+  // ---------- расчёт ----------
+  let last = null;
+  function calc(){
+    const t = C.cleaningTypes.find(x => x.id === state.type);
+    const rate = prices["t_"+t.id];
+    const lines = [];
+    const cleaning = rate * state.area;
+    lines.push([`Уборка «${t.name}», ${state.area} м² × ${rate} ₽`, cleaning]);
+    let windows = 0, extrasSum = 0, promoApplied = false;
+    C.extras.forEach(g => g.items.forEach(i => {
+      const q = state.qty[i.id] || 0; if(!q) return;
+      const sum = itemPrice(i) * q;
+      lines.push([`${i.name} × ${q}`, sum]);
+      extrasSum += sum;
+      if (g.group === "Окна") windows += sum;
+    }));
+    let subtotal = cleaning + extrasSum;
+    if (C.promo && windows >= C.promo.windowsFrom && state.qty[C.promo.freeItem]) {
+      const free = C.extras.flatMap(g=>g.items).find(i => i.id === C.promo.freeItem);
+      subtotal -= itemPrice(free); promoApplied = true;
+      lines.push([`${free.name} — в подарок`, -itemPrice(free)]);
+    }
+    const minOrder = prices.minOrder;
+    const total = Math.max(subtotal, minOrder);
+    last = { t, rate, lines, total, subtotal, minApplied: subtotal < minOrder, promoApplied };
+
+    $("total").innerHTML = `от ${fmt(total)}`;
+    $("mTotal").textContent = "от " + fmt(total);
+    $("lines").innerHTML = lines.map(l => `<li><span>${l[0]}</span><span>${l[1]<0?"−":""}${fmt(Math.abs(l[1]))}</span></li>`).join("");
+    let h = "";
+    if (last.minApplied) h += `<div class="hint">Минимальный заказ — ${fmt(minOrder)}. Можно добавить окна или кухню без доплаты до этой суммы.</div>`;
+    if (C.promo && windows > 0 && !promoApplied) h += `<div class="hint promo">${C.promo.text}</div>`;
+    if (promoApplied) h += `<div class="hint promo">Акция применена: микроволновка в подарок</div>`;
+    if (state.type === "repair" && windows > 0) h += `<div class="hint">После ремонта мытьё окна +100 ₽ к цене створки</div>`;
+    $("hints").innerHTML = h;
+  }
+
+  // ---------- форма ----------
+  const today = new Date(); const iso = d => { const z = n => String(n).padStart(2,"0"); return d.getFullYear()+"-"+z(d.getMonth()+1)+"-"+z(d.getDate()); };
+  const tomorrow = new Date(today.getTime() + 864e5);
+  $("date").min = iso(today); $("date").value = iso(tomorrow);
+  $("slot").innerHTML = C.timeSlots.map(s => `<option>${s}</option>`).join("");
+
+  function buildText(){
+    const d = $("date").value ? $("date").value.split("-").reverse().join(".") : "не указана";
+    const ex = last.lines.slice(1).map(l => "• " + l[0]).join("\n");
+    return [
+      `Заявка на уборку — ${C.company.name}`,
+      ``,
+      `Уборка: ${last.t.name}, ${state.area} м²`,
+      ex ? `Дополнительно:\n${ex}` : `Дополнительно: нет`,
+      `Предварительно: от ${fmt(last.total)}${last.minApplied ? " (минимальный заказ)" : ""}`,
+      ``,
+      `Адрес: ${$("addr").value.trim()}`,
+      `Когда: ${d}, ${$("slot").value}`,
+      `Имя: ${$("name").value.trim() || "—"}`,
+      `Телефон: ${$("phone").value.trim()}`,
+      $("comment").value.trim() ? `Комментарий: ${$("comment").value.trim()}` : null
+    ].filter(x => x !== null).join("\n");
+  }
+  function validate(){
+    const phoneDigits = $("phone").value.replace(/\D/g,"");
+    if (!$("addr").value.trim()) return ["addr","Укажите адрес"];
+    if (phoneDigits.length < 10) return ["phone","Укажите телефон, чтобы менеджер мог перезвонить"];
+    if (state.area < 1) return ["areaNum","Укажите площадь"];
+    return null;
+  }
+  function check(){
+    const v = validate();
+    $("err").textContent = v ? v[1] : "";
+    if (v){ $(v[0]).focus(); $(v[0]).scrollIntoView({behavior:"smooth",block:"center"}); }
+    return !v;
+  }
+  function copy(text, btn){
+    const done = () => { const o = btn.textContent; btn.textContent = "Скопировано ✓"; setTimeout(()=>btn.textContent=o,1500); };
+    if (navigator.clipboard) navigator.clipboard.writeText(text).then(done, () => fallback());
+    else fallback();
+    function fallback(){ const ta=document.createElement("textarea"); ta.value=text; document.body.appendChild(ta); ta.select(); try{document.execCommand("copy");done();}catch(e){} ta.remove(); }
+  }
+  $("sendBtn").addEventListener("click", () => {
+    if (!check()) return;
+    const text = buildText();
+    $("preview").textContent = text;
+    $("tgLink").href = `https://t.me/${C.telegram}?text=${encodeURIComponent(text)}`;
+    $("dlg").showModal();
+  });
+  $("tgLink").addEventListener("click", () => setTimeout(() => $("dlg").close(), 300));
+  $("copyBtn").addEventListener("click", e => { if (check()) copy(buildText(), e.target); });
+  $("dlgCopy").addEventListener("click", e => copy($("preview").textContent, e.target));
+  $("dlgClose").addEventListener("click", () => $("dlg").close());
+  ["addr","phone"].forEach(id => $(id).addEventListener("input", () => $("err").textContent = ""));
+
+  // ---------- панель владельца ----------
+  function renderAdmin(){
+    const rows = [["minOrder","Минимальный заказ, ₽"]]
+      .concat(C.cleaningTypes.map(t => ["t_"+t.id, t.name + ", ₽/м²"]))
+      .concat(C.extras.flatMap(g => g.items.map(i => ["e_"+i.id, i.name + ", ₽"])));
+    $("adminTable").innerHTML = rows.map(r => `<tr><td>${r[1]}</td><td><input type="number" min="0" data-k="${r[0]}" value="${prices[r[0]]}"></td></tr>`).join("");
+  }
+  $("adminTable").addEventListener("input", e => {
+    const k = e.target.dataset.k; if(!k) return;
+    prices[k] = Math.max(0, +e.target.value || 0);
+    const diff = {}; Object.keys(prices).forEach(x => { if (prices[x] !== base[x]) diff[x] = prices[x]; });
+    store.set(PKEY, diff);
+    renderTypes(); renderExtras(); calc();
+  });
+  $("resetBtn").addEventListener("click", () => { prices = Object.assign({}, base); store.del(PKEY); renderAdmin(); renderTypes(); renderExtras(); calc(); });
+  function route(){
+    const open = location.hash === "#admin";
+    $("admin").classList.toggle("open", open);
+    if (open){ renderAdmin(); $("admin").scrollIntoView({behavior:"smooth"}); }
+  }
+  window.addEventListener("hashchange", route);
+
+  renderTypes(); renderExtras(); calc(); route();
+})();
+</script>
+</body>
+</html>
