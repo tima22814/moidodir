@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light only">
 <title>Расчёт уборки — Мойдодыр</title>
 <script>
 /* =====================================================================
@@ -74,10 +75,7 @@ const CONFIG = {
   --bg:#ffffff; --bg-soft:#f4f7fb; --text:#1b2430; --muted:#5f6b7a; --line:#e2e8f0; --card:#ffffff;
   --radius:14px;
 }
-@media (prefers-color-scheme: dark){
-  :root:not([data-theme="light"]){ --bg:#0f141b; --bg-soft:#161d27; --text:#e8edf3; --muted:#9aa7b6; --line:#273241; --card:#141b24; }
-}
-:root[data-theme="dark"]{ --bg:#0f141b; --bg-soft:#161d27; --text:#e8edf3; --muted:#9aa7b6; --line:#273241; --card:#141b24; }
+:root{color-scheme:light}
 *{box-sizing:border-box}
 html,body{margin:0}
 body{background:var(--bg);color:var(--text);font:16px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;-webkit-font-smoothing:antialiased}
@@ -254,7 +252,7 @@ dialog::backdrop{background:rgba(0,0,0,.45)}
 <dialog id="dlg">
   <div class="dlg">
     <h2>Заявка готова</h2>
-    <p style="margin:0 0 10px;color:var(--muted);font-size:14px">Нажмите «Открыть Telegram»: текст заявки подставится сам, останется нажать «Открыть» в Telegram.</p>
+    <p style="margin:0 0 10px;color:var(--muted);font-size:14px">Нажмите «Открыть Telegram»: текст заявки подставится сам, останется нажать «Отправить». Если Telegram не открылся, скопируйте текст и отправьте вручную.</p>
     <div class="preview" id="preview"></div>
     <a class="btn" id="tgLink" target="_blank" rel="noopener" style="margin-top:12px">Открыть Telegram</a>
     <button class="btn sec" id="dlgCopy">Скопировать</button>
@@ -286,7 +284,7 @@ dialog::backdrop{background:rgba(0,0,0,.45)}
   document.documentElement.style.setProperty("--accent", C.colors.accent);
   if (C.demo){
     const bar = $("demoBar"); bar.hidden = false;
-    bar.textContent = "Демо-версия калькулятора для «" + C.company.name + "». Заявки с этой страницы уходят разработчику, а не в клиентский Telegram.";
+    bar.textContent = "Демо-версия калькулятора для «" + C.company.name + "». Заявки с этой страницы уходят разработчику, а не в компанию.";
   }
   $("logoLink").href = C.company.site;
   const img = $("logoImg");
